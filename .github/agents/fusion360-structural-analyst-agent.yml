@@ -1,0 +1,31 @@
+name: fusion360-structural-analyst-agent
+display_name: "Fusion360 Structural Analyst"
+description: "Analyzes designs, runs static checks and BMAD physics checks, suggests code or model fixes."
+version: "0.1.0"
+entrypoint:
+  type: script
+  path: "scripts/agent-runner.sh"
+runtime:
+  environment: "ubuntu-latest"
+  shell: "/bin/bash"
+model:
+  provider: "github-copilot"
+  name: "gpt-4o"
+permissions:
+  - repo: read
+  - repo: write
+  - secrets: use
+tools:
+  - name: analysis
+    type: cli
+    command: "./analyze.sh"
+  - name: bmad-cli
+    type: cli
+    command: "$BMAD_CLI_PATH"
+inputs:
+  - name: task
+    type: string
+    required: true
+  - name: file
+    type: string
+    required: false

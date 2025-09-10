@@ -1,0 +1,30 @@
+name: fusion360-builder-agent
+display_name: "Fusion360 Builder Agent"
+description: "Builder agent for Fusion360 projects. Runs build/test tasks and can invoke BMAD for simulations."
+version: "0.1.0"
+entrypoint:
+  type: script
+  path: "scripts/agent-runner.sh"
+runtime:
+  environment: "ubuntu-latest"
+  shell: "/bin/bash"
+model:
+  provider: "github-copilot"
+  name: "gpt-4o"
+permissions:
+  - repo: read
+  - repo: write
+tools:
+  - name: build
+    type: cli
+    command: "./build.sh"
+  - name: git
+    type: cli
+    command: git
+inputs:
+  - name: task
+    type: string
+    required: true
+  - name: target_branch
+    type: string
+    required: false

@@ -1,0 +1,41 @@
+name: bmad-autonomous-agent
+display_name: "BMAD Autonomous Agent"
+description: "Agent that runs BMAD workflows, edits lattice files, and executes BMAD CLI jobs. Customize model/provider and secrets to match your organization."
+version: "0.1.0"
+entrypoint:
+  type: script
+  path: "scripts/agent-runner.sh"
+runtime:
+  environment: "ubuntu-latest"
+  shell: "/bin/bash"
+model:
+  # Replace with your provider and model used by your Copilot/Agents setup
+  provider: "github-copilot"  # or "openai"
+  name: "gpt-4o"              # example placeholder
+permissions:
+  - repo: read
+  - repo: write
+  - actions: write
+  - secrets: use
+environment:
+  variables:
+    - name: BMAD_CLI_PATH
+      description: "Path to the BMAD CLI binary (eg /usr/local/bin/bmad)"
+    - name: BMAD_API_KEY
+      description: "API key for BMAD services if used"
+tools:
+  - name: bmad-cli
+    type: cli
+    command: "$BMAD_CLI_PATH"
+  - name: git
+    type: cli
+    command: git
+inputs:
+  - name: task
+    type: string
+    required: true
+    description: "Task for the agent (eg: run-bmad, analyze, patch-files)"
+  - name: target_branch
+    type: string
+    required: false
+    description: "Optional branch to push changes to"
