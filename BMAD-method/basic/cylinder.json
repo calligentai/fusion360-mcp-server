@@ -1,0 +1,35 @@
+{
+  "name": "Cylinder",
+  "description": "Creates a cylinder with specified radius and height",
+  "category": "basic",
+  "parameters": {
+    "radius": {
+      "type": "number",
+      "description": "Radius of the cylinder in mm"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height of the cylinder in mm"
+    }
+  },
+  "steps": [
+    {
+      "tool": "CreateSketch",
+      "parameters": {
+        "plane": "xy"
+      }
+    },
+    {
+      "tool": "DrawCircle",
+      "parameters": {
+        "radius": "{{radius}}"
+      }
+    },
+    {
+      "tool": "Extrude",
+      "parameters": {
+        "height": "{{height}}"
+      }
+    }
+  ]
+}

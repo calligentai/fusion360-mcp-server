@@ -19,9 +19,13 @@ from pydantic import BaseModel, Field
 from script_generator import (
     generate_script,
     generate_multi_tool_script,
+    generate_bmad_method_script,
     TOOL_REGISTRY,
     TOOLS_BY_NAME,
 )
+
+# Import BMAD reader
+from bmad_reader import bmad_reader
 
 # Create FastAPI app
 app = FastAPI(
@@ -78,6 +82,40 @@ class ToolListResponse(BaseModel):
     tools: List[ToolInfo] = Field(..., description="List of available tools")
 
 
+class BMADMethodCallRequest(BaseModel):
+    """Request to call a BMAD method."""
+    
+    method_name: str = Field(..., description="The name of the BMAD method to call")
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Parameters for the BMAD method call"
+    )
+
+
+class BMADMethodInfo(BaseModel):
+    """Information about a BMAD method."""
+    
+    name: str = Field(..., description="The name of the method")
+    description: str = Field(..., description="Description of what the method does")
+    category: str = Field(..., description="Category of the method")
+    folder: str = Field(..., description="Folder path containing the method")
+    parameters: Dict[str, Dict[str, Any]] = Field(
+        ..., description="Parameters accepted by the method"
+    )
+    steps: List[Dict[str, Any]] = Field(..., description="Steps in the method")
+
+
+class BMADMethodListResponse(BaseModel):
+    """Response containing a list of available BMAD methods."""
+    
+    methods: List[BMADMethodInfo] = Field(..., description="List of available BMAD methods")
+
+
+class BMADFolderListResponse(BaseModel):
+    """Response containing a list of BMAD method folders."""
+    
+    folders: List[str] = Field(..., description="List of available folders")
+
+
 # Define API routes
 @app.get("/")
 async def root():
@@ -119,6 +157,49 @@ async def call_tools(request: MultiToolCallRequest):
         raise HTTPException(status_code=500, detail=f"Error generating script: {str(e)}")
 
 
+@app.get("/bmad/methods", response_model=BMADMethodListResponse)
+async def list_bmad_methods(category: Optional[str] = None):
+    """List all available BMAD methods, optionally filtered by category."""
+    try:
+        methods = bmad_reader.list_methods_by_category(category)
+        method_infos = []
+        for method in methods:
+            method_info = BMADMethodInfo(
+                name=method["name"],
+                description=method["description"],
+                category=method["category"],
+                folder=method.get("folder", ""),
+                parameters=method.get("parameters", {}),
+                steps=method.get("steps", [])
+            )
+            method_infos.append(method_info)
+        return {"methods": method_infos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing BMAD methods: {str(e)}")
+
+
+@app.get("/bmad/folders", response_model=BMADFolderListResponse)
+async def list_bmad_folders():
+    """List all available BMAD method folders."""
+    try:
+        folders = bmad_reader.list_folders()
+        return {"folders": folders}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing BMAD folders: {str(e)}")
+
+
+@app.post("/bmad/call_method", response_model=ScriptResponse)
+async def call_bmad_method(request: BMADMethodCallRequest):
+    """Call a BMAD method and generate a Fusion 360 script."""
+    try:
+        script = generate_bmad_method_script(request.method_name, request.parameters)
+        return {"script": script, "message": "Success"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating script: {str(e)}")
+
+
 # MCP Server implementation
 class McpServer:
     """
@@ -131,6 +212,17 @@ class McpServer:
     def __init__(self):
         """Initialize the MCP server."""
         self.tools = {tool["name"]: tool for tool in TOOL_REGISTRY}
+        
+        # Add BMAD methods as tools
+        bmad_methods = bmad_reader.read_all_methods()
+        for method_name, method in bmad_methods.items():
+            # Convert BMAD method to MCP tool format
+            mcp_tool = {
+                "name": f"BMAD_{method_name}",
+                "description": f"BMAD Method: {method['description']}",
+                "parameters": method.get("parameters", {})
+            }
+            self.tools[mcp_tool["name"]] = mcp_tool
     
     def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -148,6 +240,10 @@ class McpServer:
             return self._handle_list_tools()
         elif method == "call_tool":
             return self._handle_call_tool(request.get("params", {}))
+        elif method == "list_bmad_methods":
+            return self._handle_list_bmad_methods()
+        elif method == "list_bmad_folders":
+            return self._handle_list_bmad_folders()
         else:
             return {
                 "error": {
@@ -216,7 +312,13 @@ class McpServer:
             }
         
         try:
-            script = generate_script(tool_name, arguments)
+            # Check if it's a BMAD method (prefixed with BMAD_)
+            if tool_name.startswith("BMAD_"):
+                method_name = tool_name[5:]  # Remove "BMAD_" prefix
+                script = generate_bmad_method_script(method_name, arguments)
+            else:
+                script = generate_script(tool_name, arguments)
+            
             return {
                 "result": {
                     "content": [
@@ -234,6 +336,42 @@ class McpServer:
                     "message": f"Invalid params: {str(e)}",
                 }
             }
+        except Exception as e:
+            return {
+                "error": {
+                    "code": -32603,
+                    "message": f"Internal error: {str(e)}",
+                }
+            }
+    
+    def _handle_list_bmad_methods(self) -> Dict[str, Any]:
+        """
+        Handle a list_bmad_methods request.
+        
+        Returns:
+            The MCP response.
+        """
+        try:
+            methods = bmad_reader.read_all_methods()
+            return {"result": {"methods": list(methods.values())}}
+        except Exception as e:
+            return {
+                "error": {
+                    "code": -32603,
+                    "message": f"Internal error: {str(e)}",
+                }
+            }
+    
+    def _handle_list_bmad_folders(self) -> Dict[str, Any]:
+        """
+        Handle a list_bmad_folders request.
+        
+        Returns:
+            The MCP response.
+        """
+        try:
+            folders = bmad_reader.list_folders()
+            return {"result": {"folders": folders}}
         except Exception as e:
             return {
                 "error": {
