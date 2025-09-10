@@ -7,8 +7,10 @@ It also implements the Model Context Protocol (MCP) for integration with Cline.
 """
 
 import json
+import logging
 import os
 import sys
+import signal
 from typing import Dict, Any, List, Optional, Union
 
 import uvicorn
@@ -26,6 +28,12 @@ from script_generator import (
 
 # Import BMAD reader
 from bmad_reader import bmad_reader
+
+# Add server directory to path for agent imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+# Import agent factory
+from server.agent_factory import agent_factory
 
 # Create FastAPI app
 app = FastAPI(
@@ -116,6 +124,62 @@ class BMADFolderListResponse(BaseModel):
     folders: List[str] = Field(..., description="List of available folders")
 
 
+# Agent-related models
+class AgentInfo(BaseModel):
+    """Information about an agent."""
+    
+    name: str = Field(..., description="The name of the agent")
+    description: str = Field(..., description="Description of what the agent does")
+    autonomous: bool = Field(..., description="Whether the agent is autonomous")
+    instructions: str = Field(default="", description="Instructions for the agent")
+    capabilities: List[str] = Field(default_factory=list, description="Agent capabilities")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Agent parameters")
+
+
+class TeamInfo(BaseModel):
+    """Information about a team."""
+    
+    name: str = Field(..., description="The name of the team")
+    description: str = Field(..., description="Description of the team")
+    members: List[str] = Field(..., description="List of agent members")
+    workflow: List[Dict[str, Any]] = Field(default_factory=list, description="Team workflow")
+
+
+class AgentListResponse(BaseModel):
+    """Response containing available agents and teams."""
+    
+    agents: Dict[str, AgentInfo] = Field(..., description="Available agents")
+    teams: Dict[str, TeamInfo] = Field(..., description="Available teams")
+
+
+class StartAgentRequest(BaseModel):
+    """Request to start an autonomous agent."""
+    
+    goal: str = Field(..., description="Goal for the autonomous agent")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Optional context information")
+
+
+class AgentStatusResponse(BaseModel):
+    """Response containing agent status."""
+    
+    agent_id: str = Field(..., description="Agent identifier")
+    name: str = Field(..., description="Agent name")
+    state: str = Field(..., description="Current agent state")
+    current_goal: Optional[str] = Field(..., description="Current goal")
+    iterations_completed: int = Field(..., description="Number of iterations completed")
+    max_iterations: int = Field(..., description="Maximum iterations allowed")
+    elapsed_time: float = Field(..., description="Elapsed execution time")
+    timeout_seconds: int = Field(..., description="Timeout in seconds")
+    error_message: Optional[str] = Field(..., description="Error message if any")
+    running: bool = Field(..., description="Whether agent is currently running")
+
+
+class RunningAgentsResponse(BaseModel):
+    """Response containing list of running agents."""
+    
+    agents: List[AgentStatusResponse] = Field(..., description="List of running agents")
+
+
 # Define API routes
 @app.get("/")
 async def root():
@@ -198,6 +262,82 @@ async def call_bmad_method(request: BMADMethodCallRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating script: {str(e)}")
+
+
+# Agent API endpoints
+@app.get("/api/bmad/agents", response_model=AgentListResponse)
+async def list_agents():
+    """List all available agents and teams with metadata."""
+    try:
+        data = agent_factory.get_available_agents()
+        
+        # Convert to response format
+        agents = {}
+        for name, config in data["agents"].items():
+            agents[name] = AgentInfo(**config)
+        
+        teams = {}
+        for name, config in data["teams"].items():
+            teams[name] = TeamInfo(**config)
+        
+        return AgentListResponse(agents=agents, teams=teams)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing agents: {str(e)}")
+
+
+@app.post("/api/bmad/agents/{agent_name}/start", response_model=AgentStatusResponse)
+async def start_agent(agent_name: str, request: StartAgentRequest):
+    """Start an autonomous agent instance."""
+    try:
+        status = agent_factory.start_autonomous_agent(
+            agent_name=agent_name,
+            goal=request.goal,
+            context=request.context
+        )
+        return AgentStatusResponse(**status)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting agent: {str(e)}")
+
+
+@app.post("/api/bmad/agents/{agent_id}/stop", response_model=AgentStatusResponse)
+async def stop_agent(agent_id: str):
+    """Stop a running agent instance."""
+    try:
+        status = agent_factory.stop_agent(agent_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+        return AgentStatusResponse(**status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error stopping agent: {str(e)}")
+
+
+@app.get("/api/bmad/agents/running", response_model=RunningAgentsResponse)
+async def list_running_agents():
+    """List all currently running agents."""
+    try:
+        running_agents = agent_factory.list_running_agents()
+        agents = [AgentStatusResponse(**status) for status in running_agents]
+        return RunningAgentsResponse(agents=agents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing running agents: {str(e)}")
+
+
+@app.get("/api/bmad/agents/{agent_id}/status", response_model=AgentStatusResponse)
+async def get_agent_status(agent_id: str):
+    """Get status of a specific agent."""
+    try:
+        status = agent_factory.get_agent_status(agent_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+        return AgentStatusResponse(**status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting agent status: {str(e)}")
 
 
 # MCP Server implementation
@@ -402,6 +542,23 @@ def run_mcp_server():
 
 def run_http_server():
     """Run the HTTP server."""
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Setup graceful shutdown handler
+    def signal_handler(signum, frame):
+        logging.info("Received shutdown signal, stopping agents...")
+        agent_factory.cleanup()
+        logging.info("Agents stopped, shutting down server.")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    logging.info("Starting Fusion 360 MCP Server with autonomous agent support...")
     uvicorn.run(app, host="127.0.0.1", port=8000)
 
 

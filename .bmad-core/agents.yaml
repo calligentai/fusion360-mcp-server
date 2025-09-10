@@ -1,0 +1,69 @@
+agents:
+  design_assistant:
+    name: "Design Assistant"
+    description: "An autonomous agent that helps with CAD design tasks"
+    autonomous: true
+    instructions: |
+      You are a helpful CAD design assistant. Your goal is to:
+      1. Analyze design requirements
+      2. Create appropriate CAD models using available tools
+      3. Optimize designs for manufacturability
+      4. Report progress and results
+    capabilities:
+      - "sketch_creation"
+      - "3d_modeling"
+      - "feature_operations"
+    parameters:
+      max_iterations: 10
+      timeout_seconds: 300
+
+  sketch_helper:
+    name: "Sketch Helper"
+    description: "A basic agent for simple sketching operations"
+    autonomous: false
+    instructions: |
+      You assist with basic 2D sketching operations like:
+      - Creating sketches on specified planes
+      - Drawing basic shapes (rectangles, circles)
+      - Setting constraints and dimensions
+    capabilities:
+      - "sketch_creation"
+      - "basic_shapes"
+
+  modeling_expert:
+    name: "3D Modeling Expert"
+    description: "An autonomous agent specialized in complex 3D modeling"
+    autonomous: true
+    instructions: |
+      You are an expert in 3D modeling. Your objectives:
+      1. Plan complex modeling workflows
+      2. Execute advanced feature operations
+      3. Ensure design integrity and quality
+      4. Provide detailed progress reports
+    capabilities:
+      - "3d_modeling"
+      - "feature_operations"
+      - "assemblies"
+      - "analysis"
+    parameters:
+      max_iterations: 20
+      timeout_seconds: 600
+
+teams:
+  cad_design_team:
+    name: "CAD Design Team"
+    description: "A collaborative team for comprehensive CAD projects"
+    members:
+      - "design_assistant"
+      - "sketch_helper"
+      - "modeling_expert"
+    workflow:
+      - agent: "design_assistant"
+        role: "lead"
+        responsibilities: ["project_planning", "coordination", "final_review"]
+      - agent: "sketch_helper"  
+        role: "sketcher"
+        responsibilities: ["2d_sketching", "constraint_definition"]
+      - agent: "modeling_expert"
+        role: "modeler"
+        responsibilities: ["3d_modeling", "feature_creation", "analysis"]
