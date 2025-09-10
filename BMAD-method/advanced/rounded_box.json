@@ -1,0 +1,51 @@
+{
+  "name": "RoundedBox",
+  "description": "Creates a box with rounded corners using fillets",
+  "category": "advanced",
+  "parameters": {
+    "width": {
+      "type": "number",
+      "description": "Width of the box in mm"
+    },
+    "depth": {
+      "type": "number",
+      "description": "Depth of the box in mm"
+    },
+    "height": {
+      "type": "number",
+      "description": "Height of the box in mm"
+    },
+    "fillet_radius": {
+      "type": "number",
+      "description": "Radius of the fillet in mm",
+      "default": 2
+    }
+  },
+  "steps": [
+    {
+      "tool": "CreateSketch",
+      "parameters": {
+        "plane": "xy"
+      }
+    },
+    {
+      "tool": "DrawRectangle",
+      "parameters": {
+        "width": "{{width}}",
+        "depth": "{{depth}}"
+      }
+    },
+    {
+      "tool": "Extrude",
+      "parameters": {
+        "height": "{{height}}"
+      }
+    },
+    {
+      "tool": "Fillet",
+      "parameters": {
+        "radius": "{{fillet_radius}}"
+      }
+    }
+  ]
+}

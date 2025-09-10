@@ -1,0 +1,52 @@
+{
+  "name": "BasicEnclosure",
+  "description": "Creates a basic enclosure by creating a box and shelling it",
+  "category": "workflow",
+  "parameters": {
+    "width": {
+      "type": "number",
+      "description": "Width of the enclosure in mm"
+    },
+    "depth": {
+      "type": "number",
+      "description": "Depth of the enclosure in mm" 
+    },
+    "height": {
+      "type": "number",
+      "description": "Height of the enclosure in mm"
+    },
+    "wall_thickness": {
+      "type": "number",
+      "description": "Wall thickness of the enclosure in mm",
+      "default": 2
+    }
+  },
+  "steps": [
+    {
+      "tool": "CreateSketch",
+      "parameters": {
+        "plane": "xy"
+      }
+    },
+    {
+      "tool": "DrawRectangle",
+      "parameters": {
+        "width": "{{width}}",
+        "depth": "{{depth}}"
+      }
+    },
+    {
+      "tool": "Extrude",
+      "parameters": {
+        "height": "{{height}}"
+      }
+    },
+    {
+      "tool": "Shell",
+      "parameters": {
+        "thickness": "{{wall_thickness}}",
+        "face_indices": [5]
+      }
+    }
+  ]
+}

@@ -8,6 +8,9 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union
 
+# Import BMAD method reader
+from bmad_reader import bmad_reader
+
 # Load tool registry
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOL_REGISTRY_PATH = os.path.join(SCRIPT_DIR, "tool_registry.json")
@@ -328,3 +331,34 @@ def generate_multi_tool_script(tool_calls: List[Dict[str, Any]]) -> str:
     full_script = BASE_SCRIPT_TEMPLATE.format(tool_scripts=indented_tool_script)
     
     return full_script
+
+
+def generate_bmad_method_script(method_name: str, parameters: Dict[str, Any]) -> str:
+    """
+    Generate a Fusion 360 Python script for a BMAD method.
+    
+    Args:
+        method_name: The name of the BMAD method to generate a script for.
+        parameters: A dictionary of parameter values for the method.
+        
+    Returns:
+        A string containing the generated Python script.
+    """
+    # Get the method definition
+    method = bmad_reader.get_method(method_name)
+    if not method:
+        raise ValueError(f"Unknown BMAD method: {method_name}")
+    
+    # Substitute parameters in the method steps
+    substituted_method = bmad_reader.substitute_parameters(method, parameters)
+    
+    # Convert method steps to tool calls
+    tool_calls = []
+    for step in substituted_method.get("steps", []):
+        tool_calls.append({
+            "tool_name": step["tool"],
+            "parameters": step.get("parameters", {})
+        })
+    
+    # Generate script using the existing multi-tool generator
+    return generate_multi_tool_script(tool_calls)

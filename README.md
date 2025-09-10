@@ -56,6 +56,9 @@ This will start the server in MCP mode, reading from stdin and writing to stdout
 - `GET /tools`: List all available tools
 - `POST /call_tool`: Call a single tool and generate a script
 - `POST /call_tools`: Call multiple tools in sequence and generate a script
+- `GET /bmad/folders`: List all BMAD method folders
+- `GET /bmad/methods`: List all BMAD methods (optionally filter by category)
+- `POST /bmad/call_method`: Call a BMAD method and generate a script
 
 ### Example API Calls
 
@@ -108,6 +111,27 @@ curl -X POST http://127.0.0.1:8000/call_tools \
   }'
 ```
 
+#### List BMAD Methods
+
+```bash
+curl -X GET http://127.0.0.1:8000/bmad/methods
+```
+
+#### Call a BMAD Method
+
+```bash
+curl -X POST http://127.0.0.1:8000/bmad/call_method \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method_name": "SimpleBox",
+    "parameters": {
+      "width": 25,
+      "depth": 15,
+      "height": 10
+    }
+  }'
+```
+
 ## 📦 Available Tools
 
 The server currently supports the following Fusion 360 tools:
@@ -127,6 +151,26 @@ The server currently supports the following Fusion 360 tools:
 
 ### Export
 - **ExportBody**: Exports a body to a file
+
+## 🏗️ BMAD Methods
+
+The server also includes BMAD (Basic Manufacturing and Design) methods - predefined workflows that combine multiple tools to create common CAD features. BMAD methods are organized in the `BMAD-method/` folder structure:
+
+### Available BMAD Methods
+
+#### Basic Methods (`basic/`)
+- **SimpleBox**: Creates a simple rectangular box with specified dimensions
+- **Cylinder**: Creates a cylinder with specified radius and height
+
+#### Advanced Methods (`advanced/`)
+- **RoundedBox**: Creates a box with filleted corners
+
+#### Workflows (`workflows/`)
+- **BasicEnclosure**: Creates a hollowed-out enclosure with specified wall thickness
+
+### Using BMAD Methods
+
+BMAD methods accept parameters just like individual tools, but execute a sequence of operations automatically. For example, the `SimpleBox` method creates a sketch, draws a rectangle, and extrudes it in one call.
 
 ## 🔌 MCP Integration
 
